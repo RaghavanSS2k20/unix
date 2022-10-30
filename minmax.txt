@@ -1,0 +1,63 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/wait.h>
+int main(){
+        key_t key = ftok(".", 'x');
+
+        int shm_id;
+        int* shm;
+        int* res;
+
+        int n=5;
+
+        shm_id = shmget(IPC_PRIVATE, (n+2)*sizeof(int), IPC_CREAT | 0666);
+        if(shm_id<0){
+                perror("shmget");
+                exit(EXIT_FAILURE);
+        }
+
+        shm = (int*)shmat(shm_id, NULL, 0);
+        if(shm == NULL){
+                perror("shmat");
+                exit(EXIT_FAILURE);
+        }
+
+
+
+        for(int i=0; i<n; i++){
+                shm[i] = rand()%100+1;
+                printf("%d, ", shm[i]);
+        }
+        printf("\b\b \n");
+
+        if(fork()==0){
+                int min=shm[0];
+                for(int i=0; i<n; i++){
+                        if(shm[i]<min)
+                                min = shm[i];
+                }
+                shm[n]=min;
+        }
+        else{
+                if(fork()==0){
+                        int max=shm[0];
+                        for(int i=0; i<n; i++){
+                                if(shm[i]>max)
+                                        max = shm[i];
+                        }
+                        shm[n+1]=max;
+                }
+                else{
+                        while(wait(NULL)>0);
+                        printf("Min: %d, Max: %d\n", shm[n], shm[n+1]);
+                        shmdt(shm);
+                        shmctl(shm_id, IPC_RMID, NULL);
+                }
+        }
+        return 0;
+}
