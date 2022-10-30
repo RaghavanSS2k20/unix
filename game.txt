@@ -1,0 +1,111 @@
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/wait.h>
+
+#define MAX 0
+#define MIN 1
+
+int main(){
+        key_t key1 = ftok(".", 'C');
+        key_t key2 = ftok(".", 'D');
+
+        int *shm1, *shm2;
+
+        int shm_id1 = shmget(key1, sizeof(int), IPC_CREAT | 0666);
+        int shm_id2 = shmget(key2, sizeof(int), IPC_CREAT | 0666);
+
+        if(shm_id1 < 0 || shm_id2 <0){
+                perror("shm");
+                exit(EXIT_FAILURE);
+        }
+
+        shm1 =(int *)shmat(shm_id1, NULL, 0);
+        shm2 =(int *)shmat(shm_id2, NULL, 0);
+
+
+        if(shm1 ==NULL || shm2 ==NULL){
+                perror("shmat");
+                exit(EXIT_FAILURE);
+        }
+
+        *shm1=0;
+        *shm2=0;
+
+        if(fork()==0){
+                srand (90 );
+                for(int i=0; i<5; i++){
+                        while(*shm1 != 0);
+                        *shm1 = rand()%100 +1;
+                }
+        }
+        else{
+                if(fork()==0){
+                        srand (75);
+                        for(int i=0; i<5; i++){
+                                while(*shm2 != 0);
+                                *shm2 = rand()%100+1;
+                        }
+                }
+                else{
+                        int scores[2]={0};
+                        for(int i=0; i<5; i++){
+                                int ch = rand()%2;
+                                if(ch==MAX)
+                                        printf("P chose Max\n");
+                                else
+                                        printf("P chose Min\n");
+
+                                while(*shm1 ==0 || *shm2 ==0);
+                                printf("C chose %d, D chose %d\n", *shm1, *shm2);
+
+                                if(ch==MAX){
+                                        if(*shm1 > *shm2){
+                                                scores[0]++;
+                                                printf("C won this round\n");
+                                        }
+                                        else if(*shm1 < *shm2){
+                                                scores[1]++;
+                                                printf("D won this round\n");
+                                        }
+                                        else{
+                                                printf("Tie\n");
+                                        }
+                                }
+                                else{
+                                        if(*shm1 < *shm2){
+                                                scores[0]++;
+                                                printf("C won this round\n");
+                                        }
+                                        else if(*shm1 > *shm2){
+                                                scores[1]++;
+                                                printf("D won this round\n");
+                                        }
+                                        else{
+                                                printf("Tie\n");
+                                        }
+                                }
+                                printf("SCORES at the end of round %d ----  C: %d, D: %d\n", i+1, scores[0], scores[1]);
+                                *shm1=0;
+                                *shm2=0;
+                        }
+                        while(wait(NULL)>0);
+                        if(scores[0]>scores[1])
+                                printf("C won\n");
+                        else if (scores[1]>scores[0])
+                                printf("D won\n");
+                        else
+                                printf("TIE\n");
+                        shmdt(shm1);
+                        shmdt(shm2);
+                        shmctl(shm_id1, IPC_RMID, NULL);
+                        shmctl(shm_id2, IPC_RMID, NULL);
+                        return 0;
+                }
+        }
+}
